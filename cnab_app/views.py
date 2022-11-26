@@ -1,14 +1,8 @@
-from django.shortcuts import render
 from cnab_app.models import Cnab
 
 from cnab_app.serializers import CnabSerializer, FileSerializer
 
 from rest_framework.views import APIView, Response, status
-
-from datetime import datetime as dt
-
-# Create your views here.
-import ipdb
 
 
 class CnabView(APIView):
@@ -25,11 +19,8 @@ class CnabView(APIView):
         list_transaction = []
 
         file = request.FILES.get("file")
-        # print(request.data)
 
         for tran in file:
-            # date_str = f"{tran[1:5].decode('utf-8')}/{tran[5:7].decode('utf-8')}/{tran[7:9].decode('utf-8')}"
-            # date_formated = dt.strptime(date_str, "%Y/%m/%d")
 
             tab = {
                 "type": int(tran[:1].decode("utf-8")),
@@ -41,7 +32,7 @@ class CnabView(APIView):
                 "dono": tran[48:62].decode("utf-8"),
                 "loja": tran[62:].decode("utf-8"),
             }
-            print(tab)
+
             serializer = CnabSerializer(data=tab)
 
             serializer.is_valid(raise_exception=True)
@@ -50,4 +41,28 @@ class CnabView(APIView):
 
             list_transaction.append(serializer.data)
 
-        return Response(list_transaction)
+        return Response(list_transaction, status.HTTP_201_CREATED)
+
+
+class SearchMovementOfOneStoreView(APIView):
+    def get(self, request):
+        store = request.query_params.get("loja", None)
+
+        store = Cnab.objects.filter(loja__icontains=store)
+
+        serializer = CnabSerializer(store, many=True)
+
+        count = 0
+
+        for move in serializer.data:
+            if dict(move)['type'] == 2 or dict(move)['type'] == 3 or dict(move)['type'] == 9:
+                count -= float(dict(move)['valor'])
+            else:
+                count += float(dict(move)['valor'])
+
+        data_of_returning = {
+            "Account_balance": round(count, 2),
+            "store_trasation_history": serializer.data
+        }
+
+        return Response(data_of_returning)
